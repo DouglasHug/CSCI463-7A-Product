@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+    <title>Checkout</title>
+</head>
+<body>
+    <h1>Checkout</h1>
+    <ul>
+        {% for item in cart %}
+            <li>{{ item.description }} - ${{ item.price }} x {{ item.quantity }} = ${{ item.subtotal }}</li>
+        {% endfor %}
+    </ul>
+    <h2>Total: ${{ total }}</h2>
+
+    <form method="POST" action="{{ url_for('authorize_payment') }}">
+        <h3>Credit Card Details</h3>
+        <label for="card_number">Credit Card Number:</label>
+        <input type="text" id="card_number" name="card_number" required><br>
+        
+        <label for="card_name">Name on Card:</label>
+        <input type="text" id="card_name" name="card_name" required><br>
+
+        <label for="card_exp">Expiration Date (MM/YYYY):</label>
+        <input type="text" id="card_exp" name="card_exp" required><br>
+
+        <input type="hidden" name="total_price" value="{{ total }}">
+        
+        <button type="submit">Authorize Payment</button>
+    </form>
+</body>
+</html>
