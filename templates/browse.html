@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,6 +60,7 @@
 			<div class="listing-details">
 				<div>Price: {{ parts['price'] }}</div>
 				<div>Weight: {{ parts['weight'] }}</div>
+				<div>Quantity: {{ parts['quantity'] }}</div>
 			</div>
 		</div>
 	</div>
@@ -84,30 +82,5 @@
     }
   </script>
 
-=======
->>>>>>> my-temp-branch
-<!doctype html>
-<html>
-<head>
-    <title>Browse Catalog</title>
-</head>
-<body>
-    <h1>Parts Catalog</h1>
-    <form action="{{ url_for('add_to_cart') }}" method="post">
-        {% for part in parts %}
-            <div>
-                <h2>{{ part.description }}</h2>
-                <p>Price: ${{ part.price }}</p>
-                <label>Quantity:</label>
-                <input type="number" name="quantity" value="1" min="1">
-                <input type="hidden" name="part_id" value="{{ part.number }}">
-                <button type="submit">Add to Cart</button>
-            </div>
-        {% endfor %}
-    </form>
-<<<<<<< HEAD
-=======
->>>>>>> 8c11ab9 (Add templates and app.py)
->>>>>>> my-temp-branch
 </body>
 </html>
