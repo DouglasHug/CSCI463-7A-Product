@@ -41,8 +41,6 @@ def get_new_db_connection():
 #START ADMIN PAGE (PRAD)--------------------------------------------
 from flask import Blueprint
 
-app = Flask(__name__)
-
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 @admin_bp.route('/')
