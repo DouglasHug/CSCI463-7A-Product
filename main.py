@@ -46,8 +46,6 @@ def index():
 
 @app.route('/browse')
 def browse_catalog():
-	if 'cart' not in session:
-		session['cart'] = []
 
 	conn = get_legacy_db_connection()
 	cursor = conn.cursor()
@@ -75,10 +73,11 @@ def browse_catalog():
 
 @app.route('/add_to_cart', methods=['POST'])
 def add_to_cart():
-	part_id = request.form.get('part_id')
-	quantity = int(request.form.get('quantity', 1))
+	part_id = request.form.get('partnumber')
+	quantity = int(request.form.get('partamount', 1))
 
 	cart = session.get('cart', [])
+
 	found = False
 	for item in cart:
 		if item['part_id'] == part_id:
@@ -88,7 +87,7 @@ def add_to_cart():
 
 	if not found:
 		cart.append({'part_id': part_id, 'quantity': quantity})
-
+	print(cart)
 	session['cart'] = cart
 
 	return redirect(url_for('browse_catalog'))
