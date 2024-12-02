@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+    <title>Browse Catalog</title>
+</head>
+<body>
+    <h1>Parts Catalog</h1>
+    <form action="{{ url_for('add_to_cart') }}" method="post">
+        {% for part in parts %}
+            <div>
+                <h2>{{ part.description }}</h2>
+                <p>Price: ${{ part.price }}</p>
+                <label>Quantity:</label>
+                <input type="number" name="quantity" value="1" min="1">
+                <input type="hidden" name="part_id" value="{{ part.number }}">
+                <button type="submit">Add to Cart</button>
+            </div>
+        {% endfor %}
+    </form>
+</body>
+</html>
