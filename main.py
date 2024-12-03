@@ -1,3 +1,4 @@
+from dask.sizeof import sizeof
 from flask import Flask, render_template, request, session, redirect, url_for
 import pymysql
 import uuid
@@ -46,14 +47,17 @@ def index():
 
 @app.route('/browse')
 def browse_catalog():
-
+	#Get parts list from legacy database
 	conn = get_legacy_db_connection()
 	cursor = conn.cursor()
 	cursor.execute('SELECT * FROM parts')
+	conn.close()
 
+	#Put query results into a dictionary
 	columns = [col[0] for col in cursor.description]
 	parts = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+	#Get part IDs from dictionary
 	part_nums = [part['number'] for part in parts]
 
 	inv_conn = get_new_db_connection()
@@ -66,30 +70,27 @@ def browse_catalog():
 
 	for part in parts:
 		part['quantity'] = inv_data.get(part['number'], 0)
-	conn.close()
 
-	return render_template('browse.html', parts=parts)
+
+	return render_template('browse.html', parts=parts, cartsize = len(session.get('cart')))
 
 
 @app.route('/add_to_cart', methods=['POST'])
 def add_to_cart():
-	part_id = request.form.get('partnumber')
-	quantity = int(request.form.get('partamount', 1))
-
+	part_id = request.form.get('submit_part')
+	quantity = int(request.form.get(f'partamount_{part_id}', 1))
 	cart = session.get('cart', [])
 
-	found = False
 	for item in cart:
 		if item['part_id'] == part_id:
 			item['quantity'] += quantity
-			found = True
 			break
-
-	if not found:
+	else:
 		cart.append({'part_id': part_id, 'quantity': quantity})
-	print(cart)
-	session['cart'] = cart
 
+
+	#session['cart'] = []
+	print(cart)
 	return redirect(url_for('browse_catalog'))
 
 
@@ -163,6 +164,25 @@ def authorize_payment():
 
 	except Exception as e:
 		return render_template('checkout_error.html', errors=[str(e)])
+
+
+@app.route('/receiving', methods=['GET', 'POST'])
+def update_inventory():
+	if request.method == 'POST':
+		part_id = request.form.get('part')
+		quantity = request.form.get('quantity')
+		print(part_id, quantity)
+		return "Inventory updated successfully!"
+	return render_template('receiving.html')
+
+
+@app.route('/authorization_failed')
+def authorization_failed():
+	return 0
+
+@app.route('/authorization_successful')
+def authorization_successful():
+	return 1
 
 
 if __name__ == '__main__':
