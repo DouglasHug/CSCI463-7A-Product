@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Worker Interface</title>
+    <style>
+        body {
+            background-color: #19232d;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .search-bar {
+            margin: 10px;
+            padding: 8px;
+            font-size: 16px;
+            width: 95%;
+            background: #2c3e50;
+            color: white;
+            border: 1px solid #34495e;
+            border-radius: 4px;
+        }
+
+        .orders-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2c3e50;
+            border-radius: 8px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #455364;
+        }
+
+        .order {
+            margin: 10px;
+            border: 2px solid #455364;
+            padding: 10px;
+            border-radius: 6px;
+            background: #19232d;
+        }
+
+        .order-title {
+            font-weight: bold;
+            background-color: #2c3e50;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .order-status {
+            font-size: 0.9em;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #34495e;
+        }
+
+        .order-details {
+            display: block;
+            padding-left: 15px;
+            margin-top: 5px;
+        }
+
+        .order-items {
+            margin-left: 15px;
+            padding: 5px;
+            background: #2c3e50;
+            border-radius: 4px;
+        }
+
+        .order-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .order-actions button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .order-actions button:hover {
+            opacity: 0.8;
+        }
+
+        .print-btn { background-color: #007bff; color: white; }
+        .complete-btn { background-color: #28a745; color: white; }
+        .email-btn { background-color: #17a2b8; color: white; }
+        .revert-btn { background-color: #dc3545; color: white; }
+
+        .no-results {
+            color: #e74c3c;
+            margin: 10px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: #2c3e50;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .tab.active {
+            background: #3498db;
+        }
+
+        @media print {
+            .packing-list {
+                background: white;
+                color: black;
+                padding: 20px;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Warehouse Worker Dashboard</h1>
+
+    <div class="tabs no-print">
+        <button class="tab active" onclick="switchTab('authorized')">Authorized Orders</button>
+        <button class="tab" onclick="switchTab('shipped')">Shipped Orders</button>
+    </div>
+
+    <input type="text" id="searchBar" class="search-bar no-print" placeholder="Search orders..." onkeyup="filterOrders()">
+
+    <div id="authorizedOrders" class="orders-section">
+        <div class="section-title no-print">Authorized Orders</div>
+        <div id="authorizedOrdersContainer"></div>
+    </div>
+
+    <div id="shippedOrders" class="orders-section" style="display: none;">
+        <div class="section-title no-print">Shipped Orders</div>
+        <div id="shippedOrdersContainer"></div>
+    </div>
+
+    <p id="noResultsMessage" class="no-results" style="display: none;">No orders found.</p>
+
+    <div id="printArea" style="display: none;"></div>
+
+    <script>
+        let currentTab = 'authorized';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.remove('active');
+            });
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            
+            document.getElementById('authorizedOrders').style.display = 
+                tab === 'authorized' ? 'block' : 'none';
+            document.getElementById('shippedOrders').style.display = 
+                tab === 'shipped' ? 'block' : 'none';
+            
+            loadOrders();
+        }
+
+        async function loadOrders() {
+            try {
+                const response = await fetch('/api/warehouse/orders');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const orders = await response.json();
+                if (orders.error) {
+                    throw new Error(orders.error);
+                }
+
+                const authorizedOrders = orders.filter(order => order.statusname === 'AUTHORIZED');
+                const shippedOrders = orders.filter(order => order.statusname === 'SHIPPED');
+
+                displayOrders('authorizedOrdersContainer', authorizedOrders, 'authorized');
+                displayOrders('shippedOrdersContainer', shippedOrders, 'shipped');
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                document.getElementById('authorizedOrdersContainer').innerHTML = 
+                    `<p class="no-results">Error loading orders: ${error.message}</p>`;
+            }
+        }
+
+        function displayOrders(containerId, orders, type) {
+            const container = document.getElementById(containerId);
+            if (!orders.length) {
+                container.innerHTML = '<p class="no-results">No orders found.</p>';
+                return;
+            }
+
+            container.innerHTML = orders.map(order => `
+                <div class="order" data-id="${order.orderid}" data-customer="${order.name}" 
+                     data-email="${order.email}" data-address="${order.address}">
+                    <div class="order-title">
+                        <span>Order #${order.orderid}</span>
+                        <span class="order-status">${order.statusname}</span>
+                    </div>
+                    <div class="order-details">
+                        <p>Customer: ${order.name}</p>
+                        <p>Email: ${order.email}</p>
+                        <p>Address: ${order.address}</p>
+                        <p>Date: ${new Date(order.orderdate).toLocaleString()}</p>
+                        <p>Items:</p>
+                        <div class="order-items">
+                            ${order.items.map(item => 
+                                `<p>${item.quantity}x ${item.description}</p>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="order-actions">
+                        <button class="print-btn" onclick="printPackingList(${order.orderid})">
+                            Print Packing List
+                        </button>
+                        ${type === 'authorized' ? `
+                            <button class="complete-btn" onclick="markAsShipped(${order.orderid})">
+                                Mark as Packed and Shipped
+                            </button>
+                        ` : `
+                            <button class="revert-btn" onclick="revertToAuthorized(${order.orderid})">
+                                Revert to Authorized
+                            </button>
+                        `}
+                        <button class="email-btn" onclick="sendEmail(${order.orderid})">
+                            Send Email Update
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function createPackingList(order) {
+            return `
+                <div class="packing-list">
+                    <h2>Packing List - Order #${order.getAttribute('data-id')}</h2>
+                    <p>Date: ${new Date().toLocaleString()}</p>
+                    <hr>
+                    <h3>Ship To:</h3>
+                    <p>${order.getAttribute('data-customer')}</p>
+                    <p>${order.getAttribute('data-address')}</p>
+                    <hr>
+                    <h3>Order Items:</h3>
+                    ${Array.from(order.querySelectorAll('.order-items p'))
+                        .map(item => `<p>${item.textContent}</p>`)
+                        .join('')}
+                    <hr>
+                    <p>Packed by: _____________________</p>
+                    <p>Checked by: _____________________</p>
+                </div>
+            `;
+        }
+
+        function printPackingList(orderId) {
+            const order = document.querySelector(`[data-id="${orderId}"]`);
+            const printArea = document.getElementById('printArea');
+            printArea.innerHTML = createPackingList(order);
+            
+            const originalContent = document.body.innerHTML;
+            document.body.innerHTML = printArea.innerHTML;
+            window.print();
+            document.body.innerHTML = originalContent;
+
+            document.addEventListener('DOMContentLoaded', loadOrders);
+            loadOrders();
+        }
+
+        async function markAsShipped(orderId) {
+            try {
+                const response = await fetch(`/api/warehouse/orders/${orderId}`, {
+                    method: 'POST'
+                });
+        
+                const result = await response.json();
+        
+                if (response.ok) {
+                    alert(`Order #${orderId} marked as shipped. Tracking number: ${result.trackingNumber}`);
+                    loadOrders();
+                } else {
+                    alert('Error marking order as shipped: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error marking order as shipped:', error);
+                alert('Error marking order as shipped: ' + error.message);
+            }
+        }
+
+        async function revertToAuthorized(orderId) {
+            try {
+                const response = await fetch(`/api/warehouse/orders/${orderId}/revert`, {
+                    method: 'POST'
+                });
+        
+                const result = await response.json();
+        
+                if (response.ok) {
+                    alert(`Order #${orderId} reverted to authorized status.`);
+                    loadOrders();
+                } else {
+                    alert('Error reverting order: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error reverting order:', error);
+                alert('Error reverting order: ' + error.message);
+            }
+        }
+
+        function sendEmail(orderId) {
+            const orderElement = document.querySelector(`[data-id="${orderId}"]`);
+            const email = orderElement.getAttribute('data-email');
+            const name = orderElement.getAttribute('data-customer');
+            const address = orderElement.getAttribute('data-address');
+            const items = Array.from(orderElement.querySelectorAll('.order-items p'))
+                              .map(p => p.textContent)
+                              .join(', ');
+            const trackingNumber = Math.random().toString(36).substring(7).toUpperCase();
+            
+            alert(`${email} ${name}, your order has been shipped to ${address}! Contents: ${items} Tracking Number: ${trackingNumber}`);
+        }
+
+        function filterOrders() {
+            const searchText = document.getElementById('searchBar').value.toLowerCase();
+            const orders = document.getElementsByClassName('order');
+            let hasResults = false;
+
+            Array.from(orders).forEach(order => {
+                const orderId = order.getAttribute('data-id');
+                const customerName = order.getAttribute('data-customer').toLowerCase();
+                
+                if (orderId.includes(searchText) || customerName.includes(searchText)) {
+                    order.style.display = '';
+                    hasResults = true;
+                } else {
+                    order.style.display = 'none';
+                }
+            });
+
+            document.getElementById('noResultsMessage').style.display = 
+                hasResults ? 'none' : 'block';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadOrders);
+    </script>
+</body>
+</html>

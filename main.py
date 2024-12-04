@@ -5,6 +5,9 @@ from flask_session import Session
 import requests
 import os
 import glob
+import string
+import random
+import datetime
 
 # constants
 VENDOR_ID = "VE001-99"
@@ -16,7 +19,6 @@ app = Flask(__name__)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SECRET_KEY'] = 'your-secret-key'
 Session(app)
-
 
 # Database connections
 def get_legacy_db_connection():
@@ -664,6 +666,132 @@ def get_order_details(order_id):
 app.register_blueprint(admin_bp)
 
 #END ADMIN PAGE--------------------------------------------
+
+@app.route('/api/warehouse/orders', methods=['GET'])
+def get_warehouse_orders():
+     new_conn = None
+     legacy_conn = None
+     try: 
+        new_conn = get_new_db_connection()
+        new_cursor = new_conn.cursor()
+
+        query = """
+            SELECT o.orderid, c.name, c.email, c.address, o.orderdate,
+                   o.totalprice, os.statusname, o.authorizationnumber
+            FROM orders o
+            JOIN customer c ON o.customerid = c.customerid
+            JOIN order_status os ON o.statusid = os.statusid
+            WHERE os.statusname IN ('AUTHORIZED', 'SHIPPED')
+            ORDER BY o.orderdate DESC
+        """
+
+        new_cursor.execute(query)
+
+        columns = [col[0] for col in new_cursor.description]
+        orders = [dict(zip(columns, row)) for row in new_cursor.fetchall()]
+
+        legacy_conn = get_legacy_db_connection()
+        legacy_cursor = legacy_conn.cursor()
+
+        for order in orders:
+            new_cursor.execute("""
+                SELECT number, quantity
+                FROM ordersparts 
+                WHERE orderid = %s
+            """, (order['orderid'],))
+             
+            order_items = []
+            for item in new_cursor.fetchall():
+                part_number = item[0]
+                quantity = item[1]
+
+                legacy_cursor.execute("""
+                    SELECT description, price, weight
+                    FROM parts
+                    WHERE number = %s
+                """, (part_number,))
+                
+                part_info = legacy_cursor.fetchone()
+                if part_info:
+                    order_items.append({
+                        'number': part_number,
+                        'quantity': quantity,
+                        'description': part_info[0],
+                        'price': float(part_info[1]),
+                        'weight': float(part_info[2])
+                    })
+            
+            order['items'] = order_items
+
+            if order['orderdate']:
+                order['orderdate'] = order['orderdate'].isoformat()
+
+        return jsonify(orders)
+     
+     except Exception as e:
+         print(f"Error in get_warehouse_orders: {str(e)}")
+         if legacy_conn:
+             legacy_conn.close()
+         if new_conn:
+             new_conn.close()
+         return jsonify({"error": f"Failed to load warehouse orders: {str(e)}"}), 500
+     
+def generate_tracking_number():
+    """Generates a random tracking number."""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+@app.route('/api/warehouse/orders/<int:order_id>', methods=['POST'])
+def mark_order_shipped(order_id):
+     try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE orders
+            SET statusid = (SELECT statusid FROM order_status WHERE statusname = 'SHIPPED'),
+                shippingdate = NOW()
+            WHERE orderid = %s""", (order_id,))
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Order not found"}), 404
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"message": "Order marked as shipped",
+                        "trackingNumber": generate_tracking_number()})
+     
+     except Exception as e:
+         return jsonify({"error": f"Failed to mark order as shipped: {str(e)}"}), 500
+     
+@app.route('/api/warehouse/orders/<int:order_id>/revert', methods=['POST'])
+def revert_order_to_authorized(order_id):
+    try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE orders
+            SET statusid = (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'),
+                shippingdate = NULL
+            WHERE orderid = %s""", (order_id,))
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Order not found"}), 404
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"message": "Order successfully reverted to authorized status"})
+    
+    except Exception as e:
+        return jsonify({"error": f"Failed to revert order: {str(e)}"}), 500
+     
+@app.route('/warehouse')
+def warehouse():
+    return render_template('warehouse.html')
 
 if __name__ == '__main__':
 	app.run(debug=True)
