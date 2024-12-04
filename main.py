@@ -45,6 +45,8 @@ def index():
 
 @app.route('/browse')
 def browse_catalog():
+	if 'cart' not in session:
+		session['cart'] = []
 	#Get parts list from legacy database
 	conn = get_legacy_db_connection()
 	cursor = conn.cursor()
@@ -70,7 +72,7 @@ def browse_catalog():
 		part['quantity'] = inv_data.get(part['number'], 0)
 
 
-	return render_template('browse.html', parts=parts, cartsize = len(session.get('cart', [])))
+	return render_template('browse.html', parts=parts, cartsize = len(session.get('cart')))
 
 
 @app.route('/add_to_cart', methods=['POST'])
