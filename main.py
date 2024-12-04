@@ -31,7 +31,7 @@ def get_legacy_db_connection():
 
 def get_new_db_connection():
 	conn = pymysql.connect(
-		host="database-1.cvcyq6uosq31.us-east-2.rds.amazonaws.com",
+		host="testdb.cjaay8sm4j8h.us-east-2.rds.amazonaws.com",
 		port=3306,
 		user="admin",
 		password="admin12345",
@@ -169,10 +169,38 @@ def authorize_payment():
 @app.route('/receiving', methods=['GET', 'POST'])
 def update_inventory():
 	if request.method == 'POST':
-		part_id = request.form.get('part')
-		quantity = request.form.get('quantity')
-		print(part_id, quantity)
+
+		quantity = int(request.form.get('quantity'))
+		input_type = int(request.form.get('inputType'))
+
+		if input_type == 0:
+			part_id = int(request.form.get('part'))
+			print(part_id, quantity)
+			conn = get_new_db_connection()
+			cursor = conn.cursor()
+			cursor.execute('UPDATE inventory SET quantity = %s WHERE number = %s', (quantity, part_id))
+			conn.commit()
+		elif input_type == 1:
+			part_name = request.form.get('part')
+			#print(part_name, quantity)
+			conn = get_legacy_db_connection()
+			cursor = conn.cursor()
+			cursor.execute('SELECT number FROM parts WHERE description = %s', part_name)
+			conn.close()
+			parts_list = cursor.fetchall()
+			if not parts_list:
+				return "None!"
+			part_id = int(parts_list[0][0])
+			conn = get_new_db_connection()
+			cursor = conn.cursor()
+			cursor.execute('UPDATE inventory SET quantity = %s WHERE number = %s', (quantity, part_id))
+			conn.commit()
+		else:
+			return "Please specify whether you are entering Part ID or Part Name"
+
 		return "Inventory updated successfully!"
+
+
 	return render_template('receiving.html')
 
 
