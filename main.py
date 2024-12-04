@@ -70,7 +70,7 @@ def browse_catalog():
 		part['quantity'] = inv_data.get(part['number'], 0)
 
 
-	return render_template('browse.html', parts=parts, cartsize = len(session.get('cart')))
+	return render_template('browse.html', parts=parts, cartsize = len(session.get('cart', [])))
 
 
 @app.route('/add_to_cart', methods=['POST'])
