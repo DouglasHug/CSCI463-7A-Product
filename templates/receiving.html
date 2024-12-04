@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receiving Desk Dashboard</title>
+  <style>
+    body {
+      background-color: #19232d;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .tab-btn {
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .inventory-update {
+      margin: 10px;
+      border: 2px solid #455364;
+      padding: 10px;
+    }
+
+    .inventory-update input {
+      padding: 8px;
+      margin: 5px;
+      width: 90%;
+    }
+
+    .update-btn {
+      margin-top: 10px;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background-color: #28a745;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Receiving Desk Dashboard</h1>
+
+  <!-- Form for updating inventory -->
+  <form method="post" action="/receiving">
+    <h3>Update Inventory</h3>
+
+    <select id="searchType" name="searchtype" onchange="updatePlaceholder()">
+      <option value="" selected disabled>Search By</option>
+      <option value="partid">Part ID</option>
+      <option value="name">Part Name</option>
+    </select>
+
+    <input type="text" id="partid" name="part" placeholder=" " style="width: 200px;">
+
+    <label for="quantity">Set New Quantity:</label>
+    <input type="number" id="quantity" name="quantity" placeholder="Enter quantity" min="1" style="width: 200px;">
+
+    <button type="submit" class="update-btn">Update Inventory</button>
+
+  <!-- Hidden input for inputType -->
+    <div id="hiddenInputs">
+		<input type="hidden" name="inputType" value="2">
+	</div>
+  </form>
+
+  <script>
+    function updatePlaceholder() {
+      var searchType = document.getElementById('searchType').value;
+      var inputField = document.getElementById('partid');
+      var hiddenInputsDiv = document.getElementById('hiddenInputs');
+
+      if (searchType === 'partid') {
+        inputField.placeholder = 'Enter part ID';
+        hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="0">';
+      } else if (searchType === 'name') {
+        inputField.placeholder = 'Enter part name';
+        hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="1">';
+      }
+    }
+  </script>
+
+</body>
+</html>
