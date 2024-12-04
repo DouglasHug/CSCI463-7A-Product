@@ -2,11 +2,44 @@
 <html>
 <head>
     <title>Payment Success</title>
+    <style>
+        .order-summary {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .price-line {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            max-width: 300px;
+        }
+        .total-line {
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <h1>Payment Successful</h1>
+    <div class="order-summary">
+        <h2>Order Summary</h2>
+        <div class="price-line">
+            <span>Subtotal:</span>
+            <span>${{ "%.2f"|format(subtotal) }}</span>
+        </div>
+        <div class="price-line">
+            <span>Shipping & Handling:</span>
+            <span>${{ "%.2f"|format(shipping_cost) }}</span>
+        </div>
+        <div class="price-line total-line">
+            <span>Total Paid:</span>
+            <span>${{ "%.2f"|format(total) }}</span>
+        </div>
+    </div>
     <p>Authorization Number: {{ authorization }}</p>
-    <p>Total Paid: ${{ total }}</p>
-    <a href="{{ url_for('browse_catalog') }}">Continue Shopping</a>
+    <p><a href="{{ url_for('browse_catalog') }}">Continue Shopping</a></p>
 </body>
 </html>

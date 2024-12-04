@@ -98,37 +98,75 @@ def add_to_cart():
 
 @app.route('/checkout', methods=['GET'])
 def checkout():
-	cart = session.get('cart', [])
-	if not cart:
-		return "Your cart is empty!"
+    cart = session.get('cart', [])
+    if not cart:
+        return "Your cart is empty!"
 
-	conn = get_legacy_db_connection()
-	cursor = conn.cursor()
+    legacy_conn = get_legacy_db_connection()
+    legacy_cursor = legacy_conn.cursor()
 
-	part_ids = [item['part_id'] for item in cart]
-	format_strings = ','.join(['%s'] * len(part_ids))
-	query = f"SELECT * FROM parts WHERE number IN ({format_strings})"
-	cursor.execute(query, part_ids)
+    new_conn = get_new_db_connection()
+    new_cursor = new_conn.cursor()
 
-	parts = cursor.fetchall()
-	conn.close()
+    try:
+        part_ids = [item['part_id'] for item in cart]
+        format_strings = ','.join(['%s'] * len(part_ids))
+        query = f"SELECT * FROM parts WHERE number IN ({format_strings})"
+        legacy_cursor.execute(query, part_ids)
 
-	total_price = 0
-	detailed_cart = []
-	for item in cart:
-		for part in parts:
-			if part[0] == int(item['part_id']):
-				subtotal = part[2] * item['quantity']
-				total_price += subtotal
-				detailed_cart.append({
-					'description': part[1],
-					'price': part[2],
-					'quantity': item['quantity'],
-					'subtotal': subtotal
-				})
-				break
+        parts = legacy_cursor.fetchall()
 
-	return render_template('checkout.html', cart=detailed_cart, total=total_price)
+        total_price = 0
+        total_weight = 0
+        detailed_cart = []
+        
+        for item in cart:
+            for part in parts:
+                if part[0] == int(item['part_id']):
+                    subtotal = part[2] * item['quantity']
+                    item_weight = part[3] * item['quantity']
+                    total_price += subtotal
+                    total_weight += item_weight
+                    detailed_cart.append({
+                        'description': part[1],
+                        'price': part[2],
+                        'quantity': item['quantity'],
+                        'subtotal': subtotal,
+                        'weight': item_weight
+                    })
+                    break
+
+        new_cursor.execute("""
+            SELECT costofbracket
+            FROM shippinghandling
+            WHERE minimumweight <= %s AND maximumweight >= %s""", 
+            (total_weight, total_weight))
+        
+        shipping_cost = new_cursor.fetchone()
+        if not shipping_cost:
+            return "Unable to calculate shipping cost for this order. Please contact support."
+        
+        shipping_cost = shipping_cost[0]
+        final_total = total_price + shipping_cost
+
+        session['order_shipping_cost'] = shipping_cost
+        session['order_weight'] = total_weight
+        session['order_subtotal'] = total_price
+        session['order_total'] = final_total
+
+        return render_template('checkout.html', 
+                             cart=detailed_cart, 
+                             subtotal=total_price,
+                             shipping_cost=shipping_cost,
+                             total=final_total,
+                             weight=total_weight,
+                             cartsize=len(cart))
+
+    finally:
+        legacy_cursor.close()
+        legacy_conn.close()
+        new_cursor.close()
+        new_conn.close()
 
 
 def validate_cart_inventory(cart, cursor):
@@ -255,6 +293,14 @@ def authorize_payment():
     if not cart:
         return render_template('checkout_error.html', errors=["Your cart is empty!"])
 
+    shipping_cost = session.get('order_shipping_cost')
+    total_weight = session.get('order_weight')
+    total_price = session.get('order_total')
+
+    if not all([shipping_cost, total_weight, total_price]):
+        return render_template('checkout_error.html', 
+                             errors=["Please return to checkout to calculate shipping."])
+
     conn = get_new_db_connection()
     cursor = conn.cursor()
 
@@ -272,7 +318,6 @@ def authorize_payment():
             session['customer_id'] = customer_id
             conn.commit()
 
-        total_price = float(request.form.get('total_price'))
         response = process_credit_card(
             total_price,
             request.form.get('card_number'),
@@ -285,11 +330,6 @@ def authorize_payment():
             return render_template('checkout_error.html', errors=auth_response['errors'])
         
         if 'authorization' in auth_response:
-            legacy_conn = get_legacy_db_connection()
-            legacy_cursor = legacy_conn.cursor()
-            total_weight, shipping_cost = calculate_shipping_cost(cart, legacy_cursor, cursor)
-            legacy_conn.close()
-
             order_id = create_order_record(
                 cursor,
                 customer_id,
@@ -304,8 +344,11 @@ def authorize_payment():
             conn.commit()
             clear_session_data(app, session)
 
+            subtotal = session.get('order_subtotal', total_price - shipping_cost)
             return render_template('checkout_success.html',
                                authorization=auth_response['authorization'],
+                               subtotal=subtotal,
+                               shipping_cost=shipping_cost,
                                total=total_price)
 
     except ValueError as e:
