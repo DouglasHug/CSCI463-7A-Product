@@ -3,6 +3,8 @@ import pymysql
 import uuid
 from flask_session import Session
 import requests
+import os
+import glob
 
 # constants
 VENDOR_ID = "VE001-99"
@@ -100,7 +102,7 @@ def checkout():
 	if not cart:
 		return "Your cart is empty!"
 
-	conn = get_new_db_connection()
+	conn = get_legacy_db_connection()
 	cursor = conn.cursor()
 
 	part_ids = [item['part_id'] for item in cart]
@@ -158,7 +160,7 @@ def authorize_payment():
    except Exception as e:
        conn.close()
        cursor.close()
-       return render_template('checkout_error.html', errors=[str(e)])
+       return render_template('checkout_error.html', errors=["input into invetory" + str(e)])
 
    card_number = request.form.get('card_number')
    card_name = request.form.get('card_name')
@@ -208,7 +210,7 @@ def authorize_payment():
                    return render_template('checkout_error.html', errors=auth_response['errors'])
                elif 'authorization' in auth_response:
                    try:
-                       conn = get_new_db_connection()
+                       conn = get_legacy_db_connection()
                        cursor = conn.cursor()
                        customer_id = session.get('customer_id')
 
@@ -223,7 +225,9 @@ def authorize_payment():
                                 return render_template('checkout_error.html', errors=["Part not found: " + item['part_id']])
                            weight = row[0]
                            total_weight += weight * item['quantity']
-
+                           conn.close()
+                           conn = get_new_db_connection()
+                           cursor = conn.cursor()
                        cursor.execute("""
                            SELECT costofbracket
                            FROM shippinghandling
@@ -235,13 +239,12 @@ def authorize_payment():
 
                        cursor.execute("""
                            INSERT INTO orders (customerid, totalprice, statusid, authorizationnumber, weight, shippingcost)
-                           VALUES (%s, %s, (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'), %s, %s, %s)
-                           RETURNING orderid""", 
+                           VALUES (%s, %s, (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'), %s, %s, %s)""", 
                            (customer_id, total_price, auth_response['authorization'], total_weight, shipping_cost))
-                       row = cursor.fetchone()
-                       if row is None:
-                            return render_template('checkout_error.html', errors=["Failed to retrieve order ID after inserting order."])
-                       order_id = row[0]
+                       order_id = cursor.lastrowid
+                       if not order_id:
+                             return render_template('checkout_error.html', errors=["Failed to retrieve order ID after inserting order."])
+                       conn.commit
 
                        for item in cart:
                            cursor.execute("""
@@ -256,13 +259,19 @@ def authorize_payment():
                                (item['quantity'], item['part_id']))
 
                        conn.commit()
+                       session_id = session.sid
                        session.clear()
+                       session_file_pattern = os.path.join(app.config['SESSION_FILE_DIR'] if 'SESSION_FILE_DIR' in app.config else './flask_session', f'sess_{session_id}*')
+                       for session_file in glob.glob(session_file_pattern):
+                            try:
+                                os.remove(session_file)
+                            except OSError as e:
+                                print(f"Error deleting session file: {e}")
                        return render_template('checkout_success.html',
                                            authorization=auth_response['authorization'],
                                            total=total_price)
                    except Exception as e:
-                       conn.rollback()
-                       return render_template('checkout_error.html', errors=[str(e)])
+                       return render_template('checkout_error.html', errors=["THIS IS WHERE ITS BREAKING PLEAZSE HELP" + str(e)])
                    finally:
                         cursor.close()
                         conn.close()
@@ -272,7 +281,7 @@ def authorize_payment():
                    error_section = auth_response.split('errors:')[1].strip()
                    if '[' in error_section and ']' in error_section:
                        errors = error_section.replace('[', '').replace(']', '').replace('"', '').split(',')
-                       return render_template('checkout_error.html', errors=errors)
+                       return render_template('checkout_error.html', errors=["3" + str(e)])
 
                return render_template('checkout_success.html',
                                    authorization=auth_response,
@@ -282,7 +291,7 @@ def authorize_payment():
                                errors=["Failed to connect to authorization service."])
 
    except Exception as e:
-       return render_template('checkout_error.html', errors=[str(e)])
+       return render_template('checkout_error.html', errors=["4" + str(e)])
 
 
 @app.route('/receiving', methods=['GET', 'POST'])
@@ -336,15 +345,6 @@ def update_inventory():
 
 	return render_template('receiving.html')
 
-
-@app.route('/authorization_failed')
-def authorization_failed():
-	return 0
-
-@app.route('/authorization_successful')
-def authorization_successful():
-	return 1
-
 #START ADMIN PAGE (PRAD)--------------------------------------------
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -374,22 +374,76 @@ def get_shipping_brackets():
 def add_shipping_bracket():
     try:
         data = request.json
+        min_weight = float(data['minimumWeight'])
+        max_weight = float(data['maximumWeight'])
+        cost = float(data['costOfBracket'])
+
+        if min_weight >= max_weight:
+            return jsonify({
+                "error": "Minimum weight must be less than maximum weight"
+            }), 400
+
+        if min_weight < 0 or max_weight < 0 or cost < 0:
+            return jsonify({
+                "error": "Weights and cost must be non-negative values"
+            }), 400
+
         conn = get_new_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
+            SELECT bracketid, minimumweight, maximumweight 
+            FROM shippinghandling 
+            WHERE (
+                (%s BETWEEN minimumweight AND maximumweight) OR
+                (%s BETWEEN minimumweight AND maximumweight) OR
+                (minimumweight BETWEEN %s AND %s) OR
+                (maximumweight BETWEEN %s AND %s)
+            )
+        """, (min_weight, max_weight, min_weight, max_weight, min_weight, max_weight))
+        
+        conflicts = cursor.fetchall()
+        if conflicts:
+            return jsonify({
+                "error": "This weight range overlaps with existing brackets",
+                "conflicts": [
+                    {
+                        "bracketId": row[0],
+                        "minimumWeight": row[1],
+                        "maximumWeight": row[2]
+                    } for row in conflicts
+                ]
+            }), 409
+        
+        cursor.execute("""
             INSERT INTO shippinghandling (minimumweight, maximumweight, costofbracket)
             VALUES (%s, %s, %s)
-        """, (data['minimumWeight'], data['maximumWeight'], data['costOfBracket']))
+        """, (min_weight, max_weight, cost))
         
         conn.commit()
         new_id = cursor.lastrowid
         cursor.close()
         conn.close()
         
-        return jsonify({"id": new_id, "message": "Shipping bracket added successfully"}), 201
+        return jsonify({
+            "id": new_id,
+            "message": "Shipping bracket added successfully",
+            "data": {
+                "bracketId": new_id,
+                "minimumWeight": min_weight,
+                "maximumWeight": max_weight,
+                "costOfBracket": cost
+            }
+        }), 201
+
+    except ValueError as e:
+        return jsonify({
+            "error": "Invalid numeric values provided"
+        }), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 @admin_bp.route('/api/admin/shipping-brackets/<int:bracket_id>', methods=['DELETE'])
 def delete_shipping_bracket(bracket_id):

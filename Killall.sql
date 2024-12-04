@@ -1,7 +1,9 @@
-SET FOREIGN_KEY_CHECKS = 0;
-drop table customer;
-drop table orders;
-drop table parts;
-drop table inventory;
-drop table shippinghandling;
-SET FOREIGN_KEY_CHECKS = 1;
+-- Drop tables in correct order to handle foreign key constraints
+DROP TABLE IF EXISTS ordersparts;
+DROP TABLE IF EXISTS cart;
+DROP TABLE IF EXISTS shippinghandling;
+DROP TABLE IF EXISTS inventory;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS parts;
+DROP TABLE IF EXISTS order_status;
+DROP TABLE IF EXISTS customer;

@@ -47,8 +47,7 @@ CREATE TABLE parts (
 CREATE TABLE inventory (
     number INT NOT NULL,
     quantity INT NOT NULL,
-    PRIMARY KEY (number),
-    FOREIGN KEY (number) REFERENCES parts(number)
+    PRIMARY KEY (number)
 );
 
 -- shipping/handling table
@@ -65,9 +64,8 @@ CREATE TABLE cart (
     customerid INT NOT NULL,
     number INT NOT NULL,
     quantity INT NOT NULL,
-    FOREIGN KEY (customerid) REFERENCES customer(customerid),
-    FOREIGN KEY (number) REFERENCES parts(number)
-)
+    FOREIGN KEY (customerid) REFERENCES customer(customerid)
+);
 
 -- ordersparts table
 CREATE TABLE ordersparts(
@@ -75,6 +73,5 @@ CREATE TABLE ordersparts(
     orderid INT NOT NULL,
     quantity INT NOT NULL,
     PRIMARY KEY (orderid, number),
-    FOREIGN KEY (number) REFERENCES parts(number),
     FOREIGN KEY (orderid) REFERENCES orders(orderid)
-)
+);
