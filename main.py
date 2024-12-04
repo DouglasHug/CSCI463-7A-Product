@@ -131,39 +131,53 @@ def checkout():
 
 @app.route('/authorize_payment', methods=['POST'])
 def authorize_payment():
-	card_number = request.form.get('card_number')
-	card_name = request.form.get('card_name')
-	card_exp = request.form.get('card_exp')
-	total_price = float(request.form.get('total_price'))
+    card_number = request.form.get('card_number')
+    card_name = request.form.get('card_name')
+    card_exp = request.form.get('card_exp')
+    total_price = float(request.form.get('total_price'))
 
-	transaction_id = f"{uuid.uuid4()}"
+    transaction_id = f"{uuid.uuid4()}"
 
-	payload = {
-		'vendor': VENDOR_ID,
-		'trans': transaction_id,
-		'cc': card_number,
-		'name': card_name,
-		'exp': card_exp,
-		'amount': f"{total_price:.2f}"
-	}
+    payload = {
+        'vendor': VENDOR_ID,
+        'trans': transaction_id,
+        'cc': card_number,
+        'name': card_name,
+        'exp': card_exp,
+        'amount': f"{total_price:.2f}"
+    }
 
-	try:
-		headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-		response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
+    try:
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
 
-		if response.status_code == 200:
-			auth_response = response.text
-			if auth_response.startswith("Error"):
-				return render_template('checkout_error.html', errors=[auth_response])
-			else:
-				auth_number = auth_response
-				session['cart'] = []
-				return render_template('checkout_success.html', authorization=auth_number, total=total_price)
-		else:
-			return render_template('checkout_error.html', errors=["Failed to connect to authorization service."])
+        if response.status_code == 200:
+            try:
+                auth_response = response.json()
+                if 'errors' in auth_response and auth_response['errors']:
+                    return render_template('checkout_error.html', errors=auth_response['errors'])
+                elif 'authorization' in auth_response:
+                    session['cart'] = []
+                    return render_template('checkout_success.html', 
+                                        authorization=auth_response['authorization'], 
+                                        total=total_price)
+            except ValueError:
+                auth_response = response.text
+                if 'errors:' in auth_response:
+                    error_section = auth_response.split('errors:')[1].strip()
+                    if '[' in error_section and ']' in error_section:
+                        errors = error_section.replace('[', '').replace(']', '').replace('"', '').split(',')
+                        return render_template('checkout_error.html', errors=errors)
+                    
+                return render_template('checkout_success.html', 
+                                    authorization=auth_response, 
+                                    total=total_price)
+        else:
+            return render_template('checkout_error.html', 
+                                errors=["Failed to connect to authorization service."])
 
-	except Exception as e:
-		return render_template('checkout_error.html', errors=[str(e)])
+    except Exception as e:
+        return render_template('checkout_error.html', errors=[str(e)])
 
 
 @app.route('/receiving', methods=['GET', 'POST'])
