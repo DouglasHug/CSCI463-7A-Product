@@ -1,5 +1,5 @@
 from dask.sizeof import sizeof
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 import pymysql
 import uuid
 from datetime import datetime
@@ -212,6 +212,172 @@ def authorization_failed():
 def authorization_successful():
 	return 1
 
+#START ADMIN PAGE (PRAD)--------------------------------------------
+from flask import Blueprint
+
+app = Flask(__name__)
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+@admin_bp.route('/')
+def admin_dashboard():
+    return render_template('admin/dashboard.html')
+
+@admin_bp.route('/api/admin/shipping-brackets', methods=['GET'])
+def get_shipping_brackets():
+    try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT bracketid, minimumweight, maximumweight, costofbracket 
+            FROM shippinghandling 
+            ORDER BY minimumweight
+        """)
+        columns = [col[0] for col in cursor.description]
+        brackets = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        return jsonify(brackets), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/admin/shipping-brackets', methods=['POST'])
+def add_shipping_bracket():
+    try:
+        data = request.json
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO shippinghandling (minimumweight, maximumweight, costofbracket)
+            VALUES (%s, %s, %s)
+        """, (data['minimumWeight'], data['maximumWeight'], data['costOfBracket']))
+        
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"id": new_id, "message": "Shipping bracket added successfully"}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/admin/shipping-brackets/<int:bracket_id>', methods=['DELETE'])
+def delete_shipping_bracket(bracket_id):
+    try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM shippinghandling WHERE bracketid = %s", (bracket_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "Shipping bracket deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/admin/orders', methods=['GET'])
+def get_orders():
+    try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT o.orderid, c.name as customer_name, o.orderdate, 
+                   o.totalprice, os.statusname, o.shippingdate,
+                   o.authorizationnumber, o.weight, o.shippingcost
+            FROM orders o
+            JOIN customer c ON o.customerid = c.customerid
+            JOIN order_status os ON o.statusid = os.statusid
+            WHERE 1=1
+        """
+        params = []
+        
+        if request.args.get('startDate'):
+            query += " AND o.orderdate >= %s"
+            params.append(request.args.get('startDate'))
+        
+        if request.args.get('endDate'):
+            query += " AND o.orderdate <= %s"
+            params.append(request.args.get('endDate'))
+        
+        if request.args.get('status'):
+            query += " AND os.statusname = %s"
+            params.append(request.args.get('status'))
+        
+        if request.args.get('minPrice'):
+            query += " AND o.totalprice >= %s"
+            params.append(float(request.args.get('minPrice')))
+            
+        if request.args.get('maxPrice'):
+            query += " AND o.totalprice <= %s"
+            params.append(float(request.args.get('maxPrice')))
+            
+        query += " ORDER BY o.orderdate DESC"
+        
+        cursor.execute(query, params)
+        
+        columns = [col[0] for col in cursor.description]
+        orders = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        for order in orders:
+            if order['orderdate']:
+                order['orderdate'] = order['orderdate'].isoformat()
+            if order['shippingdate']:
+                order['shippingdate'] = order['shippingdate'].isoformat()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(orders), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/api/admin/orders/<int:order_id>', methods=['GET'])
+def get_order_details(order_id):
+    try:
+        conn = get_new_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT o.*, c.name as customer_name, c.email, c.address, 
+                   os.statusname
+            FROM orders o
+            JOIN customer c ON o.customerid = c.customerid
+            JOIN order_status os ON o.statusid = os.statusid
+            WHERE o.orderid = %s
+        """, (order_id,))
+        
+        columns = [col[0] for col in cursor.description]
+        order = dict(zip(columns, cursor.fetchone()))
+        
+        if not order:
+            return jsonify({"error": "Order not found"}), 404
+        
+        cursor.execute("""
+            SELECT op.*, p.description, p.price, p.weight
+            FROM ordersparts op
+            JOIN parts p ON op.number = p.number
+            WHERE op.orderid = %s
+        """, (order_id,))
+        
+        columns = [col[0] for col in cursor.description]
+        items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        if order['orderdate']:
+            order['orderdate'] = order['orderdate'].isoformat()
+        if order['shippingdate']:
+            order['shippingdate'] = order['shippingdate'].isoformat()
+        
+        order['items'] = items
+        
+        cursor.close()
+        conn.close()
+        return jsonify(order), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+app.register_blueprint(admin_bp)
+
+#END ADMIN PAGE--------------------------------------------
 
 if __name__ == '__main__':
 	app.run(debug=True)
