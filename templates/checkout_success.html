@@ -1,45 +1,87 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Payment Success</title>
+    <title>Payment Successful</title>
     <style>
-        .order-summary {
-            margin: 20px 0;
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
             padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            background-color: #f5f5f5;
+            color: #333;
         }
-        .price-line {
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 32px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin: 20px 0;
+            font-size: 24px;
+        }
+        .summary-item {
             margin: 10px 0;
             display: flex;
             justify-content: space-between;
-            max-width: 300px;
+            padding: 5px 0;
         }
         .total-line {
-            border-top: 1px solid #ddd;
+            border-top: 2px solid #eee;
+            margin-top: 10px;
             padding-top: 10px;
             font-weight: bold;
+        }
+        .auth-number {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .continue-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .continue-link:hover {
+            background-color: #2980b9;
         }
     </style>
 </head>
 <body>
-    <h1>Payment Successful</h1>
-    <div class="order-summary">
+    <div class="container">
+        <h1>Payment Successful</h1>
         <h2>Order Summary</h2>
-        <div class="price-line">
+        <div class="summary-item">
             <span>Subtotal:</span>
-            <span>${{ "%.2f"|format(subtotal) }}</span>
+            <span>${{ subtotal }}</span>
         </div>
-        <div class="price-line">
+        <div class="summary-item">
             <span>Shipping & Handling:</span>
-            <span>${{ "%.2f"|format(shipping_cost) }}</span>
+            <span>${{ shipping_cost }}</span>
         </div>
-        <div class="price-line total-line">
+        <div class="summary-item total-line">
             <span>Total Paid:</span>
-            <span>${{ "%.2f"|format(total) }}</span>
+            <span>${{ total }}</span>
         </div>
+        <div class="auth-number">
+            <strong>Authorization Number:</strong> {{ authorization }}
+        </div>
+        <a href="{{ url_for('browse_catalog') }}" class="continue-link">Continue Shopping</a>
     </div>
-    <p>Authorization Number: {{ authorization }}</p>
-    <p><a href="{{ url_for('browse_catalog') }}">Continue Shopping</a></p>
 </body>
 </html>

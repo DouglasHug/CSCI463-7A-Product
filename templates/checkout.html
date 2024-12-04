@@ -1,47 +1,145 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>Checkout</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .order-summary {
+            margin-bottom: 30px;
+        }
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .total-line {
+            border-top: 2px solid #eee;
+            margin-top: 10px;
+            padding-top: 10px;
+            font-weight: bold;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        input[type="text"],
+        input[type="email"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Checkout</h1>
-    <ul>
-        {% for item in cart %}
-            <li>{{ item.description }} - ${{ item.price }} x {{ item.quantity }} = ${{ item.subtotal }}</li>
-        {% endfor %}
-    </ul>
-    <h2>Total: ${{ total }}</h2>
-
-    <form method="POST" action="{{ url_for('authorize_payment') }}">
-        <!-- Customer Information Section -->
-        <h3>Customer Information</h3>
-        {% if not session.get('customer_id') %}
-            <label for="name">Full Name:</label>
-            <input type="text" id="name" name="name" required><br><br>
-
-            <label for="email">Email Address:</label>
-            <input type="email" id="email" name="email" required><br><br>
-
-            <label for="address">Address:</label>
-            <input type="text" id="address" name="address"><br><br>
-        {% else %}
-            <p>Logged in as {{ session.get('user_name') }}</p>
-        {% endif %}
-
-        <!-- Credit Card Details Section -->
-        <h3>Credit Card Details</h3>
-        <label for="card_number">Credit Card Number:</label>
-        <input type="text" id="card_number" name="card_number" required><br><br>
+    <div class="container">
+        <h1>Checkout</h1>
         
-        <label for="card_name">Name on Card:</label>
-        <input type="text" id="card_name" name="card_name" required><br><br>
+        <div class="section order-summary">
+            <h2>Order Summary</h2>
+            {% for item in cart %}
+                <div class="summary-item">
+                    <span>{{ item.description }} × {{ item.quantity }}</span>
+                    <span>${{ "%.2f"|format(item.subtotal) }}</span>
+                </div>
+            {% endfor %}
+            
+            <div class="summary-item">
+                <span>Shipping & Handling:</span>
+                <span>${{ "%.2f"|format(shipping_cost) }}</span>
+            </div>
+            
+            <div class="summary-item total-line">
+                <span>Total:</span>
+                <span>${{ "%.2f"|format(total) }}</span>
+            </div>
+        </div>
 
-        <label for="card_exp">Expiration Date (MM/YYYY):</label>
-        <input type="text" id="card_exp" name="card_exp" required><br><br>
+        <form method="POST" action="{{ url_for('authorize_payment') }}">
+            <div class="section">
+                <h2>Customer Information</h2>
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">Shipping Address</label>
+                    <input type="text" id="address" name="address" required>
+                </div>
+            </div>
 
-        <input type="hidden" name="total_price" value="{{ total }}">
-        
-        <button type="submit">Authorize Payment</button>
-    </form>
+            <div class="section">
+                <h2>Payment Information</h2>
+                <div class="form-group">
+                    <label for="card_number">Credit Card Number</label>
+                    <input type="text" id="card_number" name="card_number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card_name">Name on Card</label>
+                    <input type="text" id="card_name" name="card_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card_exp">Expiration Date (MM/YYYY)</label>
+                    <input type="text" id="card_exp" name="card_exp" placeholder="MM/YYYY" required>
+                </div>
+            </div>
+
+            <input type="hidden" name="total_price" value="{{ total }}">
+            <button type="submit">Complete Purchase</button>
+        </form>
+    </div>
 </body>
 </html>

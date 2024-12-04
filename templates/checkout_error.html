@@ -1,16 +1,64 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>Checkout Error</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #e74c3c;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .error-list {
+            list-style: none;
+            padding: 0;
+        }
+        .error-list li {
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #fde8e8;
+            border-radius: 4px;
+            color: #e74c3c;
+        }
+        .return-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .return-link:hover {
+            background-color: #2980b9;
+        }
+    </style>
 </head>
 <body>
-    <h1>Checkout Error</h1>
-    <p>There was an issue processing your payment:</p>
-    <ul>
-        {% for error in errors %}
-            <li>{{ error }}</li>
-        {% endfor %}
-    </ul>
-    <a href="{{ url_for('checkout') }}">Return to Checkout</a>
+    <div class="container">
+        <h1>Checkout Error</h1>
+        <p>There was an issue processing your payment:</p>
+        <ul class="error-list">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('checkout') }}" class="return-link">Return to Checkout</a>
+    </div>
 </body>
 </html>

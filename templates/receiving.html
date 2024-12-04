@@ -1,92 +1,112 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Receiving Desk Dashboard</title>
-  <style>
-    body {
-      background-color: #19232d;
-      color: white;
-      margin: 0;
-      padding: 20px;
-    }
-
-    .tab-btn {
-      margin: 10px;
-      padding: 10px 20px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    .inventory-update {
-      margin: 10px;
-      border: 2px solid #455364;
-      padding: 10px;
-    }
-
-    .inventory-update input {
-      padding: 8px;
-      margin: 5px;
-      width: 90%;
-    }
-
-    .update-btn {
-      margin-top: 10px;
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      background-color: #28a745;
-      color: white;
-      cursor: pointer;
-    }
-  </style>
+    <title>Receiving Desk Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 32px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin: 20px 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Receiving Desk Dashboard</h1>
+        <form method="post" action="/receiving">
+            <h2>Update Inventory</h2>
+            
+            <div class="form-group">
+                <label for="searchType">Search By</label>
+                <select id="searchType" name="searchtype" onchange="updatePlaceholder()">
+                    <option value="" selected disabled>Select Search Type</option>
+                    <option value="partid">Part ID</option>
+                    <option value="name">Part Name</option>
+                </select>
+            </div>
 
-  <h1>Receiving Desk Dashboard</h1>
+            <div class="form-group">
+                <label for="partid">Part Information</label>
+                <input type="text" id="partid" name="part" placeholder="Select search type...">
+            </div>
 
-  <!-- Form for updating inventory -->
-  <form method="post" action="/receiving">
-    <h3>Update Inventory</h3>
+            <div class="form-group">
+                <label for="quantity">New Quantity</label>
+                <input type="number" id="quantity" name="quantity" placeholder="Enter quantity" min="1">
+            </div>
 
-    <select id="searchType" name="searchtype" onchange="updatePlaceholder()">
-      <option value="" selected disabled>Search By</option>
-      <option value="partid">Part ID</option>
-      <option value="name">Part Name</option>
-    </select>
+            <div id="hiddenInputs">
+                <input type="hidden" name="inputType" value="2">
+            </div>
 
-    <input type="text" id="partid" name="part" placeholder=" " style="width: 200px;">
+            <button type="submit">Update Inventory</button>
+        </form>
+    </div>
 
-    <label for="quantity">Set New Quantity:</label>
-    <input type="number" id="quantity" name="quantity" placeholder="Enter quantity" min="1" style="width: 200px;">
+    <script>
+        function updatePlaceholder() {
+            var searchType = document.getElementById('searchType').value;
+            var inputField = document.getElementById('partid');
+            var hiddenInputsDiv = document.getElementById('hiddenInputs');
 
-    <button type="submit" class="update-btn">Update Inventory</button>
-
-  <!-- Hidden input for inputType -->
-    <div id="hiddenInputs">
-		<input type="hidden" name="inputType" value="2">
-	</div>
-  </form>
-
-  <script>
-    function updatePlaceholder() {
-      var searchType = document.getElementById('searchType').value;
-      var inputField = document.getElementById('partid');
-      var hiddenInputsDiv = document.getElementById('hiddenInputs');
-
-      if (searchType === 'partid') {
-        inputField.placeholder = 'Enter part ID';
-        hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="0">';
-      } else if (searchType === 'name') {
-        inputField.placeholder = 'Enter part name';
-        hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="1">';
-      }
-    }
-  </script>
-
+            if (searchType === 'partid') {
+                inputField.placeholder = 'Enter part ID';
+                hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="0">';
+            } else if (searchType === 'name') {
+                inputField.placeholder = 'Enter part name';
+                hiddenInputsDiv.innerHTML = '<input type="hidden" name="inputType" value="1">';
+            }
+        }
+    </script>
 </body>
 </html>

@@ -42,7 +42,7 @@ def get_new_db_connection():
 
 @app.route('/')
 def index():
-	return "Welcome to the Parts Store!"
+    return render_template('mainpage.html')
 
 
 @app.route('/browse')
@@ -100,7 +100,7 @@ def add_to_cart():
 def checkout():
     cart = session.get('cart', [])
     if not cart:
-        return "Your cart is empty!"
+        return render_template('cart_empty.html')
 
     legacy_conn = get_legacy_db_connection()
     legacy_cursor = legacy_conn.cursor()
