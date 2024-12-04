@@ -131,53 +131,158 @@ def checkout():
 
 @app.route('/authorize_payment', methods=['POST'])
 def authorize_payment():
-    card_number = request.form.get('card_number')
-    card_name = request.form.get('card_name')
-    card_exp = request.form.get('card_exp')
-    total_price = float(request.form.get('total_price'))
+   cart = session.get('cart', [])
+   if not cart:
+       return render_template('checkout_error.html', errors=["Your cart is empty!"])
 
-    transaction_id = f"{uuid.uuid4()}"
+   conn = get_new_db_connection()
+   cursor = conn.cursor()
 
-    payload = {
-        'vendor': VENDOR_ID,
-        'trans': transaction_id,
-        'cc': card_number,
-        'name': card_name,
-        'exp': card_exp,
-        'amount': f"{total_price:.2f}"
-    }
+   cart_items = {}
 
-    try:
-        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-        response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
+   try:
+       for item in cart:
+           part_id = item['part_id']
+           quantity = item['quantity']
+           cart_items[part_id] = quantity
 
-        if response.status_code == 200:
-            try:
-                auth_response = response.json()
-                if 'errors' in auth_response and auth_response['errors']:
-                    return render_template('checkout_error.html', errors=auth_response['errors'])
-                elif 'authorization' in auth_response:
-                    session['cart'] = []
-                    return render_template('checkout_success.html', 
-                                        authorization=auth_response['authorization'], 
-                                        total=total_price)
-            except ValueError:
-                auth_response = response.text
-                if 'errors:' in auth_response:
-                    error_section = auth_response.split('errors:')[1].strip()
-                    if '[' in error_section and ']' in error_section:
-                        errors = error_section.replace('[', '').replace(']', '').replace('"', '').split(',')
-                        return render_template('checkout_error.html', errors=errors)
-                    
-                return render_template('checkout_success.html', 
-                                    authorization=auth_response, 
-                                    total=total_price)
-        else:
-            return render_template('checkout_error.html', 
-                                errors=["Failed to connect to authorization service."])
+           cursor.execute("""
+               SELECT quantity
+               FROM inventory
+               WHERE number = %s""", (part_id,))
 
-    except Exception as e:
-        return render_template('checkout_error.html', errors=[str(e)])
+           results = cursor.fetchone()
+           if not results or results[0] < quantity:
+               return render_template('checkout_error.html', errors=["Not enough inventory for part: " + part_id])
+
+   except Exception as e:
+       conn.close()
+       cursor.close()
+       return render_template('checkout_error.html', errors=[str(e)])
+
+   card_number = request.form.get('card_number')
+   card_name = request.form.get('card_name')
+   card_exp = request.form.get('card_exp')
+   total_price = float(request.form.get('total_price'))
+
+   customer_id = session.get('customer_id')
+   if not customer_id:
+        name = request.form.get('name')
+        email = request.form.get('email')
+        address = request.form.get('address')
+
+        if not all([name, email]):
+            return render_template('checkout_error.html', errors=["Please provide oyur name and email."])
+        
+        try:
+            cursor.execute("""
+                INSERT INTO customer (name, email, address)
+                VALUES (%s, %s, %s)
+            """, (name, email, address))
+            conn.commit()
+            customer_id = cursor.lastrowid
+            session['customer_id'] = customer_id
+        except Exception as e:
+             conn.rollback()
+             return render_template('checkout_error.html', errors=["Error creating customer record: " + str(e)])
+
+   transaction_id = f"{uuid.uuid4()}"
+
+   payload = {
+       'vendor': VENDOR_ID,
+       'trans': transaction_id,
+       'cc': card_number,
+       'name': card_name,
+       'exp': card_exp,
+       'amount': f"{total_price:.2f}"
+   }
+
+   try:
+       headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+       response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
+
+       if response.status_code == 200:
+           try:
+               auth_response = response.json()
+               if 'errors' in auth_response and auth_response['errors']:
+                   return render_template('checkout_error.html', errors=auth_response['errors'])
+               elif 'authorization' in auth_response:
+                   try:
+                       conn = get_new_db_connection()
+                       cursor = conn.cursor()
+                       customer_id = session.get('customer_id')
+
+                       total_weight = 0
+                       for item in cart:
+                           cursor.execute("""
+                               SELECT weight
+                               FROM parts
+                               WHERE number = %s""", (item['part_id'],))
+                           row = cursor.fetchone()
+                           if row is None:
+                                return render_template('checkout_error.html', errors=["Part not found: " + item['part_id']])
+                           weight = row[0]
+                           total_weight += weight * item['quantity']
+
+                       cursor.execute("""
+                           SELECT costofbracket
+                           FROM shippinghandling
+                           WHERE minimumweight <= %s AND maximumweight >= %s""", (total_weight, total_weight))
+                       row = cursor.fetchone()
+                       if row is None:
+                            return render_template('checkout_error.html', errors=["No shipping cost bracket found for total weight: " + str(total_weight)])
+                       shipping_cost = row[0]
+
+                       cursor.execute("""
+                           INSERT INTO orders (customerid, totalprice, statusid, authorizationnumber, weight, shippingcost)
+                           VALUES (%s, %s, (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'), %s, %s, %s)
+                           RETURNING orderid""", 
+                           (customer_id, total_price, auth_response['authorization'], total_weight, shipping_cost))
+                       row = cursor.fetchone()
+                       if row is None:
+                            return render_template('checkout_error.html', errors=["Failed to retrieve order ID after inserting order."])
+                       order_id = row[0]
+
+                       for item in cart:
+                           cursor.execute("""
+                               INSERT INTO ordersparts (number, orderid, quantity)
+                               VALUES (%s, %s, %s)""",
+                               (item['part_id'], order_id, item['quantity']))
+
+                           cursor.execute("""
+                               UPDATE inventory
+                               SET quantity = quantity - %s
+                               WHERE number = %s""",
+                               (item['quantity'], item['part_id']))
+
+                       conn.commit()
+                       session.clear()
+                       return render_template('checkout_success.html',
+                                           authorization=auth_response['authorization'],
+                                           total=total_price)
+                   except Exception as e:
+                       conn.rollback()
+                       return render_template('checkout_error.html', errors=[str(e)])
+                   finally:
+                        cursor.close()
+                        conn.close()
+           except ValueError:
+               auth_response = response.text
+               if 'errors:' in auth_response:
+                   error_section = auth_response.split('errors:')[1].strip()
+                   if '[' in error_section and ']' in error_section:
+                       errors = error_section.replace('[', '').replace(']', '').replace('"', '').split(',')
+                       return render_template('checkout_error.html', errors=errors)
+
+               return render_template('checkout_success.html',
+                                   authorization=auth_response,
+                                   total=total_price)
+       else:
+           return render_template('checkout_error.html',
+                               errors=["Failed to connect to authorization service."])
+
+   except Exception as e:
+       return render_template('checkout_error.html', errors=[str(e)])
 
 
 @app.route('/receiving', methods=['GET', 'POST'])
