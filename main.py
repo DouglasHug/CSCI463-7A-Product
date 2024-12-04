@@ -131,168 +131,193 @@ def checkout():
 	return render_template('checkout.html', cart=detailed_cart, total=total_price)
 
 
+def validate_cart_inventory(cart, cursor):
+    """Validates that all items in cart have sufficient inventory."""
+    cart_items = {}
+    for item in cart:
+        part_id = item['part_id']
+        quantity = item['quantity']
+        cart_items[part_id] = quantity
+
+        cursor.execute("""
+            SELECT quantity
+            FROM inventory
+            WHERE number = %s""", (part_id,))
+
+        results = cursor.fetchone()
+        if not results or results[0] < quantity:
+            raise ValueError(f"Not enough inventory for part: {part_id}")
+    
+    return cart_items
+
+#START OF CREDIT CARD AUTHORIZATION AND INVENTORY MANAGEMENT (prad)----------------------------
+
+def create_customer_record(cursor, name, email, address):
+    """Creates a new customer record in the database."""
+    if not all([name, email]):
+        raise ValueError("Please provide your name and email.")
+    
+    cursor.execute("""
+        INSERT INTO customer (name, email, address)
+        VALUES (%s, %s, %s)
+    """, (name, email, address))
+    
+    return cursor.lastrowid
+
+def process_credit_card(total_price, card_number, card_name, card_exp):
+    """Processes credit card payment through external service."""
+    transaction_id = f"{uuid.uuid4()}"
+    payload = {
+        'vendor': VENDOR_ID,
+        'trans': transaction_id,
+        'cc': card_number,
+        'name': card_name,
+        'exp': card_exp,
+        'amount': f"{total_price:.2f}"
+    }
+    
+    headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+    response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
+    
+    if response.status_code != 200:
+        raise ValueError("Failed to connect to authorization service.")
+    
+    return response
+
+def calculate_shipping_cost(cart, legacy_cursor, new_cursor):
+    """Calculates total weight and shipping cost for order."""
+    total_weight = 0
+    for item in cart:
+        legacy_cursor.execute("""
+            SELECT weight
+            FROM parts
+            WHERE number = %s""", (item['part_id'],))
+        row = legacy_cursor.fetchone()
+        if row is None:
+            raise ValueError(f"Part not found: {item['part_id']}")
+        weight = row[0]
+        total_weight += weight * item['quantity']
+
+    new_cursor.execute("""
+        SELECT costofbracket
+        FROM shippinghandling
+        WHERE minimumweight <= %s AND maximumweight >= %s""", (total_weight, total_weight))
+    row = new_cursor.fetchone()
+    if row is None:
+        raise ValueError(f"No shipping cost bracket found for total weight: {total_weight}")
+    
+    return total_weight, row[0]
+
+def create_order_record(cursor, customer_id, total_price, authorization, total_weight, shipping_cost):
+    """Creates the order record in the database."""
+    cursor.execute("""
+        INSERT INTO orders (customerid, totalprice, statusid, authorizationnumber, weight, shippingcost)
+        VALUES (%s, %s, (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'), %s, %s, %s)""", 
+        (customer_id, total_price, authorization, total_weight, shipping_cost))
+    
+    order_id = cursor.lastrowid
+    if not order_id:
+        raise ValueError("Failed to retrieve order ID after inserting order.")
+    
+    return order_id
+
+def process_order_items(cursor, cart, order_id):
+    """Processes individual items in the order and updates inventory."""
+    for item in cart:
+        cursor.execute("""
+            INSERT INTO ordersparts (number, orderid, quantity)
+            VALUES (%s, %s, %s)""",
+            (item['part_id'], order_id, item['quantity']))
+
+        cursor.execute("""
+            UPDATE inventory
+            SET quantity = quantity - %s
+            WHERE number = %s""",
+            (item['quantity'], item['part_id']))
+
+def clear_session_data(app, session):
+    """Clears session data and removes session files."""
+    session_id = session.sid
+    session.clear()
+    session_file_pattern = os.path.join(
+        app.config['SESSION_FILE_DIR'] if 'SESSION_FILE_DIR' in app.config else './flask_session',
+        f'sess_{session_id}*'
+    )
+    for session_file in glob.glob(session_file_pattern):
+        try:
+            os.remove(session_file)
+        except OSError as e:
+            print(f"Error deleting session file: {e}")
+
 @app.route('/authorize_payment', methods=['POST'])
 def authorize_payment():
-   cart = session.get('cart', [])
-   if not cart:
-       return render_template('checkout_error.html', errors=["Your cart is empty!"])
+    cart = session.get('cart', [])
+    if not cart:
+        return render_template('checkout_error.html', errors=["Your cart is empty!"])
 
-   conn = get_new_db_connection()
-   cursor = conn.cursor()
+    conn = get_new_db_connection()
+    cursor = conn.cursor()
 
-   cart_items = {}
+    try:
+        validate_cart_inventory(cart, cursor)
 
-   try:
-       for item in cart:
-           part_id = item['part_id']
-           quantity = item['quantity']
-           cart_items[part_id] = quantity
-
-           cursor.execute("""
-               SELECT quantity
-               FROM inventory
-               WHERE number = %s""", (part_id,))
-
-           results = cursor.fetchone()
-           if not results or results[0] < quantity:
-               return render_template('checkout_error.html', errors=["Not enough inventory for part: " + part_id])
-
-   except Exception as e:
-       conn.close()
-       cursor.close()
-       return render_template('checkout_error.html', errors=["input into invetory" + str(e)])
-
-   card_number = request.form.get('card_number')
-   card_name = request.form.get('card_name')
-   card_exp = request.form.get('card_exp')
-   total_price = float(request.form.get('total_price'))
-
-   customer_id = session.get('customer_id')
-   if not customer_id:
-        name = request.form.get('name')
-        email = request.form.get('email')
-        address = request.form.get('address')
-
-        if not all([name, email]):
-            return render_template('checkout_error.html', errors=["Please provide oyur name and email."])
-        
-        try:
-            cursor.execute("""
-                INSERT INTO customer (name, email, address)
-                VALUES (%s, %s, %s)
-            """, (name, email, address))
-            conn.commit()
-            customer_id = cursor.lastrowid
+        customer_id = session.get('customer_id')
+        if not customer_id:
+            customer_id = create_customer_record(
+                cursor,
+                request.form.get('name'),
+                request.form.get('email'),
+                request.form.get('address')
+            )
             session['customer_id'] = customer_id
-        except Exception as e:
-             conn.rollback()
-             return render_template('checkout_error.html', errors=["Error creating customer record: " + str(e)])
+            conn.commit()
 
-   transaction_id = f"{uuid.uuid4()}"
+        total_price = float(request.form.get('total_price'))
+        response = process_credit_card(
+            total_price,
+            request.form.get('card_number'),
+            request.form.get('card_name'),
+            request.form.get('card_exp')
+        )
 
-   payload = {
-       'vendor': VENDOR_ID,
-       'trans': transaction_id,
-       'cc': card_number,
-       'name': card_name,
-       'exp': card_exp,
-       'amount': f"{total_price:.2f}"
-   }
+        auth_response = response.json()
+        if 'errors' in auth_response and auth_response['errors']:
+            return render_template('checkout_error.html', errors=auth_response['errors'])
+        
+        if 'authorization' in auth_response:
+            legacy_conn = get_legacy_db_connection()
+            legacy_cursor = legacy_conn.cursor()
+            total_weight, shipping_cost = calculate_shipping_cost(cart, legacy_cursor, cursor)
+            legacy_conn.close()
 
-   try:
-       headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-       response = requests.post(CREDIT_CARD_URL, json=payload, headers=headers)
+            order_id = create_order_record(
+                cursor,
+                customer_id,
+                total_price,
+                auth_response['authorization'],
+                total_weight,
+                shipping_cost
+            )
 
-       if response.status_code == 200:
-           try:
-               auth_response = response.json()
-               if 'errors' in auth_response and auth_response['errors']:
-                   return render_template('checkout_error.html', errors=auth_response['errors'])
-               elif 'authorization' in auth_response:
-                   try:
-                       conn = get_legacy_db_connection()
-                       cursor = conn.cursor()
-                       customer_id = session.get('customer_id')
+            process_order_items(cursor, cart, order_id)
+            
+            conn.commit()
+            clear_session_data(app, session)
 
-                       total_weight = 0
-                       for item in cart:
-                           cursor.execute("""
-                               SELECT weight
-                               FROM parts
-                               WHERE number = %s""", (item['part_id'],))
-                           row = cursor.fetchone()
-                           if row is None:
-                                return render_template('checkout_error.html', errors=["Part not found: " + item['part_id']])
-                           weight = row[0]
-                           total_weight += weight * item['quantity']
-                           conn.close()
-                           conn = get_new_db_connection()
-                           cursor = conn.cursor()
-                       cursor.execute("""
-                           SELECT costofbracket
-                           FROM shippinghandling
-                           WHERE minimumweight <= %s AND maximumweight >= %s""", (total_weight, total_weight))
-                       row = cursor.fetchone()
-                       if row is None:
-                            return render_template('checkout_error.html', errors=["No shipping cost bracket found for total weight: " + str(total_weight)])
-                       shipping_cost = row[0]
+            return render_template('checkout_success.html',
+                               authorization=auth_response['authorization'],
+                               total=total_price)
 
-                       cursor.execute("""
-                           INSERT INTO orders (customerid, totalprice, statusid, authorizationnumber, weight, shippingcost)
-                           VALUES (%s, %s, (SELECT statusid FROM order_status WHERE statusname = 'AUTHORIZED'), %s, %s, %s)""", 
-                           (customer_id, total_price, auth_response['authorization'], total_weight, shipping_cost))
-                       order_id = cursor.lastrowid
-                       if not order_id:
-                             return render_template('checkout_error.html', errors=["Failed to retrieve order ID after inserting order."])
-                       conn.commit
+    except ValueError as e:
+        return render_template('checkout_error.html', errors=[str(e)])
+    except Exception as e:
+        conn.rollback()
+        return render_template('checkout_error.html', errors=["An error occurred: " + str(e)])
+    finally:
+        cursor.close()
+        conn.close()
 
-                       for item in cart:
-                           cursor.execute("""
-                               INSERT INTO ordersparts (number, orderid, quantity)
-                               VALUES (%s, %s, %s)""",
-                               (item['part_id'], order_id, item['quantity']))
-
-                           cursor.execute("""
-                               UPDATE inventory
-                               SET quantity = quantity - %s
-                               WHERE number = %s""",
-                               (item['quantity'], item['part_id']))
-
-                       conn.commit()
-                       session_id = session.sid
-                       session.clear()
-                       session_file_pattern = os.path.join(app.config['SESSION_FILE_DIR'] if 'SESSION_FILE_DIR' in app.config else './flask_session', f'sess_{session_id}*')
-                       for session_file in glob.glob(session_file_pattern):
-                            try:
-                                os.remove(session_file)
-                            except OSError as e:
-                                print(f"Error deleting session file: {e}")
-                       return render_template('checkout_success.html',
-                                           authorization=auth_response['authorization'],
-                                           total=total_price)
-                   except Exception as e:
-                       return render_template('checkout_error.html', errors=["THIS IS WHERE ITS BREAKING PLEAZSE HELP" + str(e)])
-                   finally:
-                        cursor.close()
-                        conn.close()
-           except ValueError:
-               auth_response = response.text
-               if 'errors:' in auth_response:
-                   error_section = auth_response.split('errors:')[1].strip()
-                   if '[' in error_section and ']' in error_section:
-                       errors = error_section.replace('[', '').replace(']', '').replace('"', '').split(',')
-                       return render_template('checkout_error.html', errors=["3" + str(e)])
-
-               return render_template('checkout_success.html',
-                                   authorization=auth_response,
-                                   total=total_price)
-       else:
-           return render_template('checkout_error.html',
-                               errors=["Failed to connect to authorization service."])
-
-   except Exception as e:
-       return render_template('checkout_error.html', errors=["4" + str(e)])
-
+#END OF CREDIT CARD AUTHORIZATION AND INVENTORY MANAGEMENT ----------------------------
 
 @app.route('/receiving', methods=['GET', 'POST'])
 def update_inventory():
@@ -516,11 +541,13 @@ def get_orders():
 
 @admin_bp.route('/api/admin/orders/<int:order_id>', methods=['GET'])
 def get_order_details(order_id):
+    new_conn = None
+    legacy_conn = None
     try:
-        conn = get_new_db_connection()
-        cursor = conn.cursor()
+        new_conn = get_new_db_connection()
+        new_cursor = new_conn.cursor()
         
-        cursor.execute("""
+        new_cursor.execute("""
             SELECT o.*, c.name as customer_name, c.email, c.address, 
                    os.statusname
             FROM orders o
@@ -529,34 +556,67 @@ def get_order_details(order_id):
             WHERE o.orderid = %s
         """, (order_id,))
         
-        columns = [col[0] for col in cursor.description]
-        order = dict(zip(columns, cursor.fetchone()))
+        columns = [col[0] for col in new_cursor.description]
+        order_data = new_cursor.fetchone()
         
-        if not order:
+        if not order_data:
             return jsonify({"error": "Order not found"}), 404
+            
+        order = dict(zip(columns, order_data))
+
+        legacy_conn = get_legacy_db_connection()
+        legacy_cursor = legacy_conn.cursor()
         
-        cursor.execute("""
-            SELECT op.*, p.description, p.price, p.weight
+        new_cursor.execute("""
+            SELECT op.number, op.orderid, op.quantity
             FROM ordersparts op
-            JOIN parts p ON op.number = p.number
             WHERE op.orderid = %s
         """, (order_id,))
         
-        columns = [col[0] for col in cursor.description]
-        items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        order_items = []
+        for item in new_cursor.fetchall():
+            part_number = item[0]
+            quantity = item[2]
+            
+            legacy_cursor.execute("""
+                SELECT description, price, weight
+                FROM parts
+                WHERE number = %s
+            """, (part_number,))
+            
+            part_info = legacy_cursor.fetchone()
+            if part_info:
+                order_items.append({
+                    'number': part_number,
+                    'orderid': order_id,
+                    'quantity': quantity,
+                    'description': part_info[0],
+                    'price': float(part_info[1]),
+                    'weight': float(part_info[2]),
+                    'subtotal': float(part_info[1]) * quantity
+                })
         
         if order['orderdate']:
             order['orderdate'] = order['orderdate'].isoformat()
         if order['shippingdate']:
             order['shippingdate'] = order['shippingdate'].isoformat()
         
-        order['items'] = items
+        order['items'] = order_items
         
-        cursor.close()
-        conn.close()
+        legacy_cursor.close()
+        legacy_conn.close()
+        new_cursor.close()
+        new_conn.close()
+        
         return jsonify(order), 200
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in get_order_details: {str(e)}")
+        if legacy_conn:
+            legacy_conn.close()
+        if new_conn:
+            new_conn.close()
+        return jsonify({"error": f"Failed to load order details: {str(e)}"}), 500
     
 app.register_blueprint(admin_bp)
 
