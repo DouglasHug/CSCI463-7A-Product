@@ -297,8 +297,15 @@ def update_inventory():
 			print(part_id, quantity)
 			conn = get_new_db_connection()
 			cursor = conn.cursor()
+			cursor.execute('SELECT * FROM inventory WHERE number = %s', part_id)
+			if not cursor.fetchone():
+				cursor.execute('INSERT INTO inventory (number, quantity) VALUES (%s, %s)', (part_id, quantity))
+				conn.commit()
+				conn.close()
+				return "New item added to inventory"
 			cursor.execute('UPDATE inventory SET quantity = %s WHERE number = %s', (quantity, part_id))
 			conn.commit()
+			conn.close()
 		elif input_type == 1:
 			part_name = request.form.get('part')
 			#print(part_name, quantity)
@@ -308,12 +315,19 @@ def update_inventory():
 			conn.close()
 			parts_list = cursor.fetchall()
 			if not parts_list:
-				return "None!"
+				return "This part does not exist"
 			part_id = int(parts_list[0][0])
 			conn = get_new_db_connection()
 			cursor = conn.cursor()
+			cursor.execute('SELECT * FROM inventory WHERE number = %s', part_id)
+			if not cursor.fetchone():
+				cursor.execute('INSERT INTO inventory (number, quantity) VALUES (%s, %s)', (part_id, quantity))
+				conn.commit()
+				conn.close()
+				return "New item added to inventory"
 			cursor.execute('UPDATE inventory SET quantity = %s WHERE number = %s', (quantity, part_id))
 			conn.commit()
+			conn.close()
 		else:
 			return "Please specify whether you are entering Part ID or Part Name"
 
