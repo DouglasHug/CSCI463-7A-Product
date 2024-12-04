@@ -1,8 +1,6 @@
-from dask.sizeof import sizeof
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, Blueprint
 import pymysql
 import uuid
-from datetime import datetime
 from flask_session import Session
 import requests
 
@@ -213,10 +211,6 @@ def authorization_successful():
 	return 1
 
 #START ADMIN PAGE (PRAD)--------------------------------------------
-from flask import Blueprint
-
-app = Flask(__name__)
-
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 @admin_bp.route('/')
