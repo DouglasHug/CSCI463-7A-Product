@@ -7,7 +7,6 @@ import os
 import glob
 import string
 import random
-import datetime
 
 # constants
 VENDOR_ID = "VE001-99"
@@ -349,11 +348,9 @@ def authorize_payment():
             
             conn.commit()
 
-            # Email confirmation details
             email_subject = f"Order #{order_id} Confirmation"
             email_body = f"Order placed! Your order #{order_id} has been received and is being processed."
 
-            # Just print for logging purposes
             print(f"Email would be sent to: {customer_email}\nSubject: {email_subject}\nBody: {email_body}")
 
             subtotal = session.get('order_subtotal', total_price - shipping_cost)

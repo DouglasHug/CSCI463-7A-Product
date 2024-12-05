@@ -137,21 +137,54 @@
                 display: none !important;
             }
         }
-        .return-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #3498db;
+        .nav-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            background-color: #455364;
             color: white;
-            text-decoration: none;
+            padding: 12px 24px;
             border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.2s;
         }
-        .return-link:hover {
-            background-color: #2980b9;
-	}
+
+        .nav-button:hover {
+            background-color: #576473;
+        }
+
+        .nav-icon {
+            margin-right: 8px;
+            font-size: 1.2em;
+        }
+
+        .container {
+            margin-top: 40px;
+        }
+
+        .return-link {
+            display: none;
+        }
+        h1 {
+            color: white;
+            margin-bottom: 30px;
+            font-size: 32px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <a href="{{ url_for('index') }}" class="nav-button">
+        <span class="nav-icon">🏠</span>
+        Return Home
+    </a>
     <h1>Warehouse Worker Dashboard</h1>
 
     <div class="tabs no-print">

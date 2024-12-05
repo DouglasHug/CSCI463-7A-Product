@@ -32,18 +32,21 @@
         }
         .order-summary {
             margin-bottom: 30px;
+            color: white;
         }
         .summary-item {
             display: flex;
             justify-content: space-between;
             padding: 10px 0;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #455364;
+            color: white;
         }
         .total-line {
-            border-top: 2px solid #eee;
+            border-top: 2px solid #455364;
             margin-top: 10px;
             padding-top: 10px;
             font-weight: bold;
+            color: white;
         }
         .form-group {
             margin-bottom: 20px;
@@ -58,17 +61,23 @@
         input[type="email"] {
             width: 100%;
             padding: 8px;
-            border: 1px solid #ddd;
+            border: 1px solid #455364;
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
+            background-color: #2c3e50;
+            color: white;
+        }
+        input[type="text"]::placeholder,
+        input[type="email"]::placeholder {
+            color: #8899aa;
         }
         button {
             width: 100%;
             max-width: 400px;
             padding: 20px;
             font-size: 1.5em;
-            background-color:  #455364;
+            background-color: #455364;
             color: white;
             border: none;
             border-radius: 4px;

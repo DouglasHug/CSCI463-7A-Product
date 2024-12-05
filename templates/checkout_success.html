@@ -1,139 +1,162 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Order Successful</title>
+    <title>Checkout</title>
     <style>
         body {
             font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #19232d;
+            color: #333;
+        }
+        .container {
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .success-container {
-            background-color: white;
-            padding: 20px;
+            background-color: #19232d;
+            padding: 30px;
+            border-width: 8px;
+            border-style: solid;
+            border-color:#2A3440;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            text-align: center;
         }
-        .success-message {
-            color: #28a745;
-            font-size: 24px;
+        h1, h2 {
+            color: white;
             margin-bottom: 20px;
         }
-        .order-details {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
         }
-        .email-status {
-            margin: 15px 0;
-            padding: 10px;
-            background-color: #e8f5e9;
-            border-radius: 4px;
+        .order-summary {
+            margin-bottom: 30px;
+            color: white;
         }
-        .button {
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 5px;
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            color: white;
+            border: none;
+        }
+        .total-line {
+            border-top: 2px solid #eee;
+            margin-top: 10px;
+            padding-top: 10px;
+            font-weight: bold;
+            color: white;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: white;
+        }
+        input[type="text"],
+        input[type="email"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #455364;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: #2c3e50;
+            color: white;
+        }
+        input[type="text"]::placeholder,
+        input[type="email"]::placeholder {
+            color: #8899aa;
+        }
+        button {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+            font-size: 1.5em;
+            background-color: #455364;
+            color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             text-decoration: none;
-            color: white;
+            transition: background-color 0.2s;
         }
-        .home-button {
-            background-color: #007bff;
+        button:hover {
+            background-color: #576473;
         }
-        .email-button {
-            background-color: #28a745;
-        }
-        .button:hover {
-            opacity: 0.9;
-        }
-        .email-preview {
-            display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .email-header {
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-            margin-bottom: 15px;
-        }
-        .email-body {
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            white-space: pre-line;
+        .section {
+            margin-bottom: 30px;
         }
     </style>
 </head>
 <body>
-    <div class="success-container">
-        <div class="success-message">
-            Order Successfully Placed!
-        </div>
+    <div class="container">
+        <h1>Checkout</h1>
         
-        <div class="order-details">
-            <h3>Order Summary</h3>
-            <p>Order Number: #{{ order_id }}</p>
-            <p>Authorization Number: {{ authorization }}</p>
-            <p>Subtotal: ${{ "%.2f"|format(subtotal) }}</p>
-            <p>Shipping: ${{ "%.2f"|format(shipping_cost) }}</p>
-            <p>Total: ${{ "%.2f"|format(total) }}</p>
-        </div>
-
-        <div class="email-status">
-            Payment confirmation email sent: {{ email_sent_to }}
-            <button class="button email-button" onclick="toggleEmail()">Show Email</button>
-        </div>
-
-        <div id="emailPreview" class="email-preview">
-            <div class="email-header">
-                <p><strong>To:</strong> {{ email_sent_to }}</p>
-                <p><strong>Subject:</strong> {{ email_subject }}</p>
+        <div class="section order-summary">
+            <h2>Order Summary</h2>
+            {% for item in cart %}
+                <div class="summary-item">
+                    <span>{{ item.description }} × {{ item.quantity }}</span>
+                    <span>${{ "%.2f"|format(item.subtotal) }}</span>
+                </div>
+            {% endfor %}
+            
+            <div class="summary-item">
+                <span>Shipping & Handling:</span>
+                <span>${{ "%.2f"|format(shipping_cost) }}</span>
             </div>
-            <div class="email-body">
-Dear {{ customer_name }},
-
-Thank you for your order!
-
-{{ email_body }}
-
-Order Details:
-Order Number: #{{ order_id }}
-Order Total: ${{ "%.2f"|format(total) }}
-
-Your order will be shipped to:
-{{ shipping_address }}
-
-If you have any questions about your order, please contact our customer service.
-
-Best regards,
-The Store Team
+            
+            <div class="summary-item total-line">
+                <span>Total:</span>
+                <span>${{ "%.2f"|format(total) }}</span>
             </div>
         </div>
 
-        <a href="/" class="button home-button">Return to Home</a>
+        <form method="POST" action="{{ url_for('authorize_payment') }}">
+            <div class="section">
+                <h2>Customer Information</h2>
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">Shipping Address</label>
+                    <input type="text" id="address" name="address" required>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Payment Information</h2>
+                <div class="form-group">
+                    <label for="card_number">Credit Card Number</label>
+                    <input type="text" id="card_number" name="card_number" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card_name">Name on Card</label>
+                    <input type="text" id="card_name" name="card_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card_exp">Expiration Date (MM/YYYY)</label>
+                    <input type="text" id="card_exp" name="card_exp" placeholder="MM/YYYY" required>
+                </div>
+            </div>
+
+            <input type="hidden" name="total_price" value="{{ total }}">
+            <button type="submit">Complete Purchase</button>
+        </form>
     </div>
-
-    <script>
-        function toggleEmail() {
-            const emailPreview = document.getElementById('emailPreview');
-            const button = document.querySelector('.email-button');
-            if (emailPreview.style.display === 'none' || !emailPreview.style.display) {
-                emailPreview.style.display = 'block';
-                button.textContent = 'Hide Email';
-            } else {
-                emailPreview.style.display = 'none';
-                button.textContent = 'Show Email';
-            }
-        }
-    </script>
 </body>
 </html>
