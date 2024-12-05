@@ -1,87 +1,139 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Payment Successful</title>
+    <title>Order Successful</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        .container {
             max-width: 800px;
             margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .success-container {
             background-color: white;
-            padding: 30px;
+            padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 30px;
-            font-size: 32px;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-        }
-        h2 {
-            color: #34495e;
-            margin: 20px 0;
+        .success-message {
+            color: #28a745;
             font-size: 24px;
+            margin-bottom: 20px;
         }
-        .summary-item {
-            margin: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-        }
-        .total-line {
-            border-top: 2px solid #eee;
-            margin-top: 10px;
-            padding-top: 10px;
-            font-weight: bold;
-        }
-        .auth-number {
+        .order-details {
             margin: 20px 0;
-            padding: 10px;
+            padding: 15px;
             background-color: #f8f9fa;
             border-radius: 4px;
         }
-        .continue-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #3498db;
-            color: white;
-            text-decoration: none;
+        .email-status {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #e8f5e9;
             border-radius: 4px;
         }
-        .continue-link:hover {
-            background-color: #2980b9;
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            color: white;
+        }
+        .home-button {
+            background-color: #007bff;
+        }
+        .email-button {
+            background-color: #28a745;
+        }
+        .button:hover {
+            opacity: 0.9;
+        }
+        .email-preview {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .email-header {
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 15px;
+        }
+        .email-body {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            white-space: pre-line;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Payment Successful</h1>
-        <h2>Order Summary</h2>
-        <div class="summary-item">
-            <span>Subtotal:</span>
-            <span>${{ subtotal }}</span>
+    <div class="success-container">
+        <div class="success-message">
+            Order Successfully Placed!
         </div>
-        <div class="summary-item">
-            <span>Shipping & Handling:</span>
-            <span>${{ shipping_cost }}</span>
+        
+        <div class="order-details">
+            <h3>Order Summary</h3>
+            <p>Order Number: #{{ order_id }}</p>
+            <p>Authorization Number: {{ authorization }}</p>
+            <p>Subtotal: ${{ "%.2f"|format(subtotal) }}</p>
+            <p>Shipping: ${{ "%.2f"|format(shipping_cost) }}</p>
+            <p>Total: ${{ "%.2f"|format(total) }}</p>
         </div>
-        <div class="summary-item total-line">
-            <span>Total Paid:</span>
-            <span>${{ total }}</span>
+
+        <div class="email-status">
+            Payment confirmation email sent: {{ email_sent_to }}
+            <button class="button email-button" onclick="toggleEmail()">Show Email</button>
         </div>
-        <div class="auth-number">
-            <strong>Authorization Number:</strong> {{ authorization }}
+
+        <div id="emailPreview" class="email-preview">
+            <div class="email-header">
+                <p><strong>To:</strong> {{ email_sent_to }}</p>
+                <p><strong>Subject:</strong> {{ email_subject }}</p>
+            </div>
+            <div class="email-body">
+Dear {{ customer_name }},
+
+Thank you for your order!
+
+{{ email_body }}
+
+Order Details:
+Order Number: #{{ order_id }}
+Order Total: ${{ "%.2f"|format(total) }}
+
+Your order will be shipped to:
+{{ shipping_address }}
+
+If you have any questions about your order, please contact our customer service.
+
+Best regards,
+The Store Team
+            </div>
         </div>
-        <a href="{{ url_for('browse_catalog') }}" class="continue-link">Continue Shopping</a>
+
+        <a href="/" class="button home-button">Return to Home</a>
     </div>
+
+    <script>
+        function toggleEmail() {
+            const emailPreview = document.getElementById('emailPreview');
+            const button = document.querySelector('.email-button');
+            if (emailPreview.style.display === 'none' || !emailPreview.style.display) {
+                emailPreview.style.display = 'block';
+                button.textContent = 'Hide Email';
+            } else {
+                emailPreview.style.display = 'none';
+                button.textContent = 'Show Email';
+            }
+        }
+    </script>
 </body>
 </html>

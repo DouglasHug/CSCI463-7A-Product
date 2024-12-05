@@ -309,13 +309,17 @@ def authorize_payment():
     try:
         validate_cart_inventory(cart, cursor)
 
+        customer_email = request.form.get('email')
+        customer_name = request.form.get('name')
+        shipping_address = request.form.get('address')
+        
         customer_id = session.get('customer_id')
         if not customer_id:
             customer_id = create_customer_record(
                 cursor,
-                request.form.get('name'),
-                request.form.get('email'),
-                request.form.get('address')
+                customer_name,
+                customer_email,
+                shipping_address
             )
             session['customer_id'] = customer_id
             conn.commit()
@@ -344,14 +348,29 @@ def authorize_payment():
             process_order_items(cursor, cart, order_id)
             
             conn.commit()
-            clear_session_data(app, session)
+
+            # Email confirmation details
+            email_subject = f"Order #{order_id} Confirmation"
+            email_body = f"Order placed! Your order #{order_id} has been received and is being processed."
+
+            # Just print for logging purposes
+            print(f"Email would be sent to: {customer_email}\nSubject: {email_subject}\nBody: {email_body}")
 
             subtotal = session.get('order_subtotal', total_price - shipping_cost)
+            
+            clear_session_data(app, session)
+
             return render_template('checkout_success.html',
+                               order_id=order_id,
                                authorization=auth_response['authorization'],
                                subtotal=subtotal,
                                shipping_cost=shipping_cost,
-                               total=total_price)
+                               total=total_price,
+                               email_sent_to=customer_email,
+                               email_subject=email_subject,
+                               email_body=email_body,
+                               customer_name=customer_name,
+                               shipping_address=shipping_address)
 
     except ValueError as e:
         return render_template('checkout_error.html', errors=[str(e)])
@@ -414,6 +433,10 @@ def update_inventory():
 
 
 	return render_template('receiving.html')
+
+@app.route('/receiving')
+def receiving():
+    return render_template('receiving.html')
 
 #START ADMIN PAGE (PRAD)--------------------------------------------
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
