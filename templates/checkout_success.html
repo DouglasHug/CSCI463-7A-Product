@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Checkout</title>
+    <title>Order Successful</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -17,146 +17,139 @@
             padding: 30px;
             border-width: 8px;
             border-style: solid;
-            border-color:#2A3440;
+            border-color: #2A3440;
             border-radius: 8px;
             overflow: hidden;
-            text-align: center;
-        }
-        h1, h2 {
-            color: white;
-            margin-bottom: 20px;
         }
         h1 {
+            color: white;
+            margin-bottom: 20px;
             border-bottom: 2px solid #eee;
             padding-bottom: 10px;
+            text-align: center;
         }
-        .order-summary {
-            margin-bottom: 30px;
+        h2, h3 {
             color: white;
-        }
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            color: white;
-            border: none;
-        }
-        .total-line {
-            border-top: 2px solid #eee;
-            margin-top: 10px;
-            padding-top: 10px;
-            font-weight: bold;
-            color: white;
-        }
-        .form-group {
             margin-bottom: 20px;
         }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: white;
+        .success-message {
+            color: #28a745;
+            font-size: 24px;
+            margin-bottom: 20px;
         }
-        input[type="text"],
-        input[type="email"] {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #455364;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
+        .order-details {
+            margin: 20px 0;
+            padding: 15px;
             background-color: #2c3e50;
+            border-radius: 4px;
             color: white;
         }
-        input[type="text"]::placeholder,
-        input[type="email"]::placeholder {
-            color: #8899aa;
-        }
-        button {
-            width: 100%;
-            max-width: 400px;
-            padding: 20px;
-            font-size: 1.5em;
-            background-color: #455364;
+        .email-status {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #28a745;
+            border-radius: 4px;
             color: white;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             text-decoration: none;
+            color: white;
+            background-color: #455364;
             transition: background-color 0.2s;
         }
-        button:hover {
+        .button:hover {
             background-color: #576473;
         }
-        .section {
-            margin-bottom: 30px;
+        .email-preview {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #2c3e50;
+            border: 1px solid #455364;
+            border-radius: 4px;
+            color: white;
+        }
+        .email-header {
+            padding-bottom: 15px;
+            border-bottom: 1px solid #455364;
+            margin-bottom: 15px;
+        }
+        .email-body {
+            padding: 15px;
+            background-color: #2c3e50;
+            border-radius: 4px;
+            white-space: pre-line;
+        }
+        p {
+            color: white;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Checkout</h1>
+        <h1>Order Successfully Placed!</h1>
         
-        <div class="section order-summary">
-            <h2>Order Summary</h2>
-            {% for item in cart %}
-                <div class="summary-item">
-                    <span>{{ item.description }} × {{ item.quantity }}</span>
-                    <span>${{ "%.2f"|format(item.subtotal) }}</span>
-                </div>
-            {% endfor %}
-            
-            <div class="summary-item">
-                <span>Shipping & Handling:</span>
-                <span>${{ "%.2f"|format(shipping_cost) }}</span>
+        <div class="order-details">
+            <h3>Order Summary</h3>
+            <p>Order Number: #{{ order_id }}</p>
+            <p>Authorization Number: {{ authorization }}</p>
+            <p>Subtotal: ${{ "%.2f"|format(subtotal) }}</p>
+            <p>Shipping: ${{ "%.2f"|format(shipping_cost) }}</p>
+            <p>Total: ${{ "%.2f"|format(total) }}</p>
+        </div>
+
+        <div class="email-status">
+            Payment confirmation email sent: {{ email_sent_to }}
+            <button class="button" onclick="toggleEmail()">Show Email</button>
+        </div>
+
+        <div id="emailPreview" class="email-preview">
+            <div class="email-header">
+                <p><strong>To:</strong> {{ email_sent_to }}</p>
+                <p><strong>Subject:</strong> {{ email_subject }}</p>
             </div>
-            
-            <div class="summary-item total-line">
-                <span>Total:</span>
-                <span>${{ "%.2f"|format(total) }}</span>
+            <div class="email-body">
+Dear {{ customer_name }},
+
+Thank you for your order!
+
+{{ email_body }}
+
+Order Details:
+Order Number: #{{ order_id }}
+Order Total: ${{ "%.2f"|format(total) }}
+
+Your order will be shipped to:
+{{ shipping_address }}
+
+If you have any questions about your order, please contact our customer service.
+
+Best regards,
+The Store Team
             </div>
         </div>
 
-        <form method="POST" action="{{ url_for('authorize_payment') }}">
-            <div class="section">
-                <h2>Customer Information</h2>
-                <div class="form-group">
-                    <label for="name">Full Name</label>
-                    <input type="text" id="name" name="name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="address">Shipping Address</label>
-                    <input type="text" id="address" name="address" required>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2>Payment Information</h2>
-                <div class="form-group">
-                    <label for="card_number">Credit Card Number</label>
-                    <input type="text" id="card_number" name="card_number" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="card_name">Name on Card</label>
-                    <input type="text" id="card_name" name="card_name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="card_exp">Expiration Date (MM/YYYY)</label>
-                    <input type="text" id="card_exp" name="card_exp" placeholder="MM/YYYY" required>
-                </div>
-            </div>
-
-            <input type="hidden" name="total_price" value="{{ total }}">
-            <button type="submit">Complete Purchase</button>
-        </form>
+        <a href="/" class="button">Return to Home</a>
     </div>
+
+    <script>
+        function toggleEmail() {
+            const emailPreview = document.getElementById('emailPreview');
+            const button = document.querySelector('.button');
+            if (emailPreview.style.display === 'none' || !emailPreview.style.display) {
+                emailPreview.style.display = 'block';
+                button.textContent = 'Hide Email';
+            } else {
+                emailPreview.style.display = 'none';
+                button.textContent = 'Show Email';
+            }
+        }
+    </script>
 </body>
 </html>

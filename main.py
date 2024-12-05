@@ -311,7 +311,7 @@ def authorize_payment():
         customer_email = request.form.get('email')
         customer_name = request.form.get('name')
         shipping_address = request.form.get('address')
-        
+
         customer_id = session.get('customer_id')
         if not customer_id:
             customer_id = create_customer_record(
@@ -358,16 +358,19 @@ def authorize_payment():
             clear_session_data(app, session)
 
             return render_template('checkout_success.html',
-                               order_id=order_id,
-                               authorization=auth_response['authorization'],
-                               subtotal=subtotal,
-                               shipping_cost=shipping_cost,
-                               total=total_price,
-                               email_sent_to=customer_email,
-                               email_subject=email_subject,
-                               email_body=email_body,
-                               customer_name=customer_name,
-                               shipping_address=shipping_address)
+                                order_id=order_id,
+                                authorization=auth_response['authorization'],
+                                subtotal=subtotal,
+                                shipping_cost=shipping_cost,
+                                total=total_price,
+                                email_sent_to=customer_email,
+                                email_subject=email_subject,
+                                email_body=email_body,
+                                customer_name=customer_name,
+                                shipping_address=shipping_address)
+        else:
+            return render_template('checkout_error.html', 
+                                errors=["Payment authorization failed. Please try again."])
 
     except ValueError as e:
         return render_template('checkout_error.html', errors=[str(e)])
